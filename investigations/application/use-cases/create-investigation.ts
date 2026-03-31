@@ -30,6 +30,7 @@ export class CreateInvestigation {
       createdAt: now,
       updatedAt: now,
       findings: [],
+      findingConnections: [],
       blockedSources: [],
     };
 

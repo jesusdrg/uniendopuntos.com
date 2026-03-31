@@ -1,0 +1,119 @@
+ POST /api/investigations/85f5d204-8228-4085-b2c1-8c2f59d69c66/start 202 in 1862ms (next.js: 1431ms, application-code: 430ms)
+ GET /api/investigations/85f5d204-8228-4085-b2c1-8c2f59d69c66 200 in 832ms (next.js: 15ms, application-code: 818ms)
+{
+    "timestamp": "2026-03-30T20:53:48.151Z",
+    "level": "info",
+    "requestId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "route": "investigation-runner",
+    "methodEvent": "run.diagnostic",
+    "statusResult": "ok",
+    "durationMs": 0,
+    "metadata": {
+        "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+        "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+        "round": 1,
+        "node": "orchestrator",
+        "workerId": null,
+        "stage": "search",
+        "result": "ok",
+        "shortMessage": "Seed URLs: 5; inserted=0, deduped=5"
+    },
+    "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+    "round": 1,
+    "node": "orchestrator",
+    "workerId": null,
+    "stage": "search",
+    "result": "ok",
+    "shortMessage": "Seed URLs: 5; inserted=0, deduped=5"
+}
+{
+    "timestamp": "2026-03-30T20:53:48.445Z",
+    "level": "info",
+    "requestId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "route": "investigation-runner",
+    "methodEvent": "run.diagnostic",
+    "statusResult": "skip",
+    "durationMs": 0,
+    "metadata": {
+        "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+        "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+        "round": 1,
+        "node": "worker_1",
+        "workerId": "researcher-1",
+        "stage": "reserve",
+        "result": "skip",
+        "shortMessage": "No hay URLs pendientes para reservar."
+    },
+    "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+    "round": 1,
+    "node": "worker_1",
+    "workerId": "researcher-1",
+    "stage": "reserve",
+    "result": "skip",
+    "shortMessage": "No hay URLs pendientes para reservar."
+}
+{
+    "timestamp": "2026-03-30T20:53:48.726Z",
+    "level": "info",
+    "requestId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "route": "investigation-runner",
+    "methodEvent": "run.diagnostic",
+    "statusResult": "skip",
+    "durationMs": 0,
+    "metadata": {
+        "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+        "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+        "round": 1,
+        "node": "worker_2",
+        "workerId": "researcher-2",
+        "stage": "reserve",
+        "result": "skip",
+        "shortMessage": "No hay URLs pendientes para reservar."
+    },
+    "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+    "round": 1,
+    "node": "worker_2",
+    "workerId": "researcher-2",
+    "stage": "reserve",
+    "result": "skip",
+    "shortMessage": "No hay URLs pendientes para reservar."
+}
+{
+    "timestamp": "2026-03-30T20:53:49.005Z",
+    "level": "info",
+    "requestId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "route": "investigation-runner",
+    "methodEvent": "run.diagnostic",
+    "statusResult": "skip",
+    "durationMs": 0,
+    "metadata": {
+        "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+        "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+        "round": 1,
+        "node": "worker_3",
+        "workerId": "researcher-3",
+        "stage": "reserve",
+        "result": "skip",
+        "shortMessage": "No hay URLs pendientes para reservar."
+    },
+    "runId": "649ed7c6-2c21-41d8-a5fc-62bc476b240e",
+    "investigationId": "85f5d204-8228-4085-b2c1-8c2f59d69c66",
+    "round": 1,
+    "node": "worker_3",
+    "workerId": "researcher-3",
+    "stage": "reserve",
+    "result": "skip",
+    "shortMessage": "No hay URLs pendientes para reservar."
+}
+{
+    "timestamp": "2026-03-30T20:53:49.161Z",
+    "level": "info",
+    "requestId": "c8066626-d587-424d-b2dd-1b3208b96f22",
+    "route": "/api/investigations/[id]/runs/[runId]/diagnostics",
+    "methodEvent": "GET",
+    "statusResult": "200",
+    "durationMs": 1
+}

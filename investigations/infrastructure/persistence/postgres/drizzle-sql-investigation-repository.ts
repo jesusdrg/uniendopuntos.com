@@ -41,6 +41,9 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
             title: finding.title,
             sourceUrl: finding.sourceUrl,
             summary: finding.summary,
+            relatedFindingIds: finding.relatedFindingIds ?? [],
+            sharedEntityKeys: finding.sharedEntityKeys ?? [],
+            claimHashes: finding.claimHashes ?? [],
             createdAt: finding.createdAt,
           })),
         );
@@ -122,6 +125,9 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
         title: findingRow.title,
         sourceUrl: findingRow.sourceUrl,
         summary: findingRow.summary,
+        relatedFindingIds: parseStringArraySafe(findingRow.relatedFindingIds),
+        sharedEntityKeys: parseStringArraySafe(findingRow.sharedEntityKeys),
+        claimHashes: parseStringArraySafe(findingRow.claimHashes),
         createdAt: findingRow.createdAt,
       });
       findingsByInvestigationId.set(findingRow.investigationId, list);
@@ -150,6 +156,17 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
     );
   }
 
+  async deleteById(id: string): Promise<boolean> {
+    const investigation = await this.findById(id);
+
+    if (!investigation) {
+      return false;
+    }
+
+    await this.database.delete(investigationsTable).where(eq(investigationsTable.id, id));
+    return true;
+  }
+
   private toRow(investigation: Investigation) {
     return {
       id: investigation.id,
@@ -158,6 +175,7 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
       createdAt: investigation.createdAt,
       updatedAt: investigation.updatedAt,
       findings: investigation.findings,
+      findingConnections: investigation.findingConnections ?? [],
       blockedSources: investigation.blockedSources,
     };
   }
@@ -174,6 +192,7 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
       | undefined,
   ): Investigation {
     const findings = this.parseFindings(row.findings, findingsRows);
+    const findingConnections = this.parseFindingConnections(row.findingConnections);
     const blockedSources = this.parseBlockedSources(row.blockedSources, blockedSourcesRows);
 
     return {
@@ -183,6 +202,7 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       findings,
+      findingConnections,
       blockedSources,
     };
   }
@@ -197,11 +217,14 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
       if ("investigationId" in firstRow) {
         return (findingsRows as (typeof findingsTable.$inferSelect)[]).map((findingRow) => ({
           id: findingRow.id,
-          title: findingRow.title,
-          sourceUrl: findingRow.sourceUrl,
-          summary: findingRow.summary,
-          createdAt: findingRow.createdAt,
-        }));
+            title: findingRow.title,
+            sourceUrl: findingRow.sourceUrl,
+            summary: findingRow.summary,
+            relatedFindingIds: parseStringArraySafe(findingRow.relatedFindingIds),
+            sharedEntityKeys: parseStringArraySafe(findingRow.sharedEntityKeys),
+            claimHashes: parseStringArraySafe(findingRow.claimHashes),
+            createdAt: findingRow.createdAt,
+          }));
       }
 
       return findingsRows as FindingCard[];
@@ -223,6 +246,12 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
           sourceUrl?: unknown;
           url?: unknown;
           summary?: unknown;
+          confidence?: unknown;
+          evidence?: unknown;
+          gaps?: unknown;
+          relatedFindingIds?: unknown;
+          sharedEntityKeys?: unknown;
+          claimHashes?: unknown;
           createdAt?: unknown;
         };
 
@@ -239,13 +268,16 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
           return null;
         }
 
-        return {
-          id: row.id,
-          title: row.title,
-          sourceUrl,
-          summary: row.summary,
-          createdAt: row.createdAt,
-        };
+          return {
+            id: row.id,
+            title: row.title,
+            sourceUrl,
+            summary: row.summary,
+            relatedFindingIds: parseStringArraySafe(row.relatedFindingIds),
+            sharedEntityKeys: parseStringArraySafe(row.sharedEntityKeys),
+            claimHashes: parseStringArraySafe(row.claimHashes),
+            createdAt: row.createdAt,
+          };
       })
       .filter((finding): finding is FindingCard => finding !== null);
   }
@@ -325,6 +357,51 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
       .filter((blockedSource): blockedSource is BlockedSource => blockedSource !== null);
   }
 
+  private parseFindingConnections(legacyConnections: unknown): Investigation["findingConnections"] {
+    if (!Array.isArray(legacyConnections)) {
+      return [];
+    }
+
+    return legacyConnections
+      .map((item): NonNullable<Investigation["findingConnections"]>[number] | null => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const row = item as {
+          id?: unknown;
+          fromId?: unknown;
+          toId?: unknown;
+          score?: unknown;
+          reason?: unknown;
+          sharedEntityKeys?: unknown;
+          sharedClaimHashes?: unknown;
+        };
+
+        if (
+          typeof row.id !== "string" ||
+          typeof row.fromId !== "string" ||
+          typeof row.toId !== "string" ||
+          typeof row.score !== "number" ||
+          !Number.isFinite(row.score) ||
+          typeof row.reason !== "string"
+        ) {
+          return null;
+        }
+
+        return {
+          id: row.id,
+          fromId: row.fromId,
+          toId: row.toId,
+          score: row.score,
+          reason: row.reason,
+          sharedEntityKeys: parseStringArraySafe(row.sharedEntityKeys),
+          sharedClaimHashes: parseStringArraySafe(row.sharedClaimHashes),
+        };
+      })
+      .filter((connection): connection is NonNullable<Investigation["findingConnections"]>[number] => connection !== null);
+  }
+
   private isValidLegacyTimestamp(value: string): boolean {
     if (!LEGACY_TIMESTAMP_PATTERN.test(value)) {
       return false;
@@ -332,4 +409,24 @@ export class DrizzleSqlInvestigationRepository implements InvestigationRepositor
 
     return !Number.isNaN(Date.parse(value));
   }
+}
+
+function parseStringArraySafe(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const normalized = item.trim();
+    if (normalized.length === 0) {
+      continue;
+    }
+    output.push(normalized);
+  }
+
+  return output;
 }

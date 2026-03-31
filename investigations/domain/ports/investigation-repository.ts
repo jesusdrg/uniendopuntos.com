@@ -4,4 +4,5 @@ export interface InvestigationRepository {
   save(investigation: Investigation): Promise<void>;
   findById(id: string): Promise<Investigation | null>;
   list(): Promise<Investigation[]>;
+  deleteById(id: string): Promise<boolean>;
 }

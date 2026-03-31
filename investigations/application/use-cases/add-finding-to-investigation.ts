@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { NotFoundError } from "@/investigations/application/errors/not-found-error";
+import { deriveInvestigationFindingConnections } from "@/investigations/application/services/finding-connections";
 import { ValidationError } from "@/investigations/application/errors/validation-error";
 import type { Investigation } from "@/investigations/domain/entities/investigation";
 import {
@@ -13,6 +14,12 @@ export type AddFindingToInvestigationInput = {
   title?: unknown;
   summary?: unknown;
   sourceUrl?: unknown;
+  confidence?: unknown;
+  evidence?: unknown;
+  gaps?: unknown;
+  relatedFindingIds?: unknown;
+  sharedEntityKeys?: unknown;
+  claimHashes?: unknown;
 };
 
 export class AddFindingToInvestigation {
@@ -34,13 +41,22 @@ export class AddFindingToInvestigation {
       title: this.parseTitle(input.title),
       summary: this.parseSummary(input.summary),
       sourceUrl: this.parseSourceUrl(input.sourceUrl),
+      confidence: this.parseConfidence(input.confidence),
+      evidence: this.parseStringArray(input.evidence),
+      gaps: this.parseStringArray(input.gaps),
+      relatedFindingIds: this.parseStringArray(input.relatedFindingIds),
+      sharedEntityKeys: this.parseStringArray(input.sharedEntityKeys),
+      claimHashes: this.parseStringArray(input.claimHashes),
       createdAt: new Date().toISOString(),
     };
+
+    const connectionResult = deriveInvestigationFindingConnections([...investigation.findings, finding]);
 
     const updatedInvestigation: Investigation = {
       ...investigation,
       updatedAt: new Date().toISOString(),
-      findings: [...investigation.findings, finding],
+      findings: connectionResult.findings,
+      findingConnections: connectionResult.connections,
     };
 
     await this.repository.save(updatedInvestigation);
@@ -52,6 +68,17 @@ export class AddFindingToInvestigation {
         persistedAt,
         payload: {
           finding,
+          updatedAt: updatedInvestigation.updatedAt,
+        },
+      }),
+    );
+    await this.eventsPublisher.publish(
+      createInvestigationDomainEvent({
+        type: "investigation.finding_connections_updated",
+        investigationId: updatedInvestigation.id,
+        persistedAt,
+        payload: {
+          connections: updatedInvestigation.findingConnections ?? [],
           updatedAt: updatedInvestigation.updatedAt,
         },
       }),
@@ -119,5 +146,43 @@ export class AddFindingToInvestigation {
     } catch {
       throw new ValidationError("El campo 'sourceUrl' debe ser una URL valida.");
     }
+  }
+
+  private parseConfidence(value: unknown): "low" | "medium" | "high" | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    if (value !== "low" && value !== "medium" && value !== "high") {
+      throw new ValidationError("El campo 'confidence' debe ser low, medium o high.");
+    }
+
+    return value;
+  }
+
+  private parseStringArray(value: unknown): string[] | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    if (!Array.isArray(value)) {
+      throw new ValidationError("Los campos 'evidence' y 'gaps' deben ser arrays de strings.");
+    }
+
+    const output: string[] = [];
+    for (const item of value) {
+      if (typeof item !== "string") {
+        throw new ValidationError("Los campos 'evidence' y 'gaps' deben contener solo strings.");
+      }
+
+      const normalized = item.trim();
+      if (normalized.length === 0) {
+        continue;
+      }
+
+      output.push(normalized);
+    }
+
+    return output;
   }
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
   blockedSourcesTable,
   findingsTable,
+  investigationUrlQueueTable,
   investigationsTable,
 } from "@/investigations/infrastructure/persistence/postgres/schema";
 
@@ -20,5 +21,8 @@ describe("Postgres schema timestamp hardening", () => {
     expect((blockedSourcesTable.blockedAt as { getSQLType: () => string }).getSQLType()).toBe(
       "timestamp with time zone",
     );
+    expect(
+      (investigationUrlQueueTable.normalizedUrlHash as { getSQLType: () => string }).getSQLType(),
+    ).toBe("text");
   });
 });

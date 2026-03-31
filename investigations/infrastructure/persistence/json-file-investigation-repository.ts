@@ -55,6 +55,18 @@ export class JsonFileInvestigationRepository implements InvestigationRepository 
     });
   }
 
+  async deleteById(id: string): Promise<boolean> {
+    const store = await this.readStore();
+    const nextInvestigations = store.investigations.filter((item) => item.id !== id);
+
+    if (nextInvestigations.length === store.investigations.length) {
+      return false;
+    }
+
+    await this.writeStore({ investigations: nextInvestigations });
+    return true;
+  }
+
   private async ensureStoreFile(): Promise<void> {
     const parentDirectory = dirname(this.filePath);
     await mkdir(parentDirectory, { recursive: true });
@@ -111,6 +123,7 @@ export class JsonFileInvestigationRepository implements InvestigationRepository 
       createdAt?: unknown;
       updatedAt?: unknown;
       findings?: unknown;
+      findingConnections?: unknown;
       blockedSources?: unknown;
     };
 
@@ -131,6 +144,7 @@ export class JsonFileInvestigationRepository implements InvestigationRepository 
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       findings: this.normalizeFindings(item.findings),
+      findingConnections: this.normalizeFindingConnections(item.findingConnections),
       blockedSources: this.normalizeBlockedSources(item.blockedSources),
     };
   }
@@ -152,6 +166,12 @@ export class JsonFileInvestigationRepository implements InvestigationRepository 
           sourceUrl?: unknown;
           url?: unknown;
           summary?: unknown;
+          confidence?: unknown;
+          evidence?: unknown;
+          gaps?: unknown;
+          relatedFindingIds?: unknown;
+          sharedEntityKeys?: unknown;
+          claimHashes?: unknown;
           createdAt?: unknown;
         };
 
@@ -172,6 +192,12 @@ export class JsonFileInvestigationRepository implements InvestigationRepository 
           title: finding.title,
           sourceUrl,
           summary: finding.summary,
+          confidence: normalizeConfidence(finding.confidence),
+          evidence: normalizeStringList(finding.evidence),
+          gaps: normalizeStringList(finding.gaps),
+          relatedFindingIds: normalizeStringList(finding.relatedFindingIds),
+          sharedEntityKeys: normalizeStringList(finding.sharedEntityKeys),
+          claimHashes: normalizeStringList(finding.claimHashes),
           createdAt: finding.createdAt,
         };
       })
@@ -231,6 +257,51 @@ export class JsonFileInvestigationRepository implements InvestigationRepository 
       .filter((item): item is BlockedSource => item !== null);
   }
 
+  private normalizeFindingConnections(raw: unknown): Investigation["findingConnections"] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item): NonNullable<Investigation["findingConnections"]>[number] | null => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const connection = item as {
+          id?: unknown;
+          fromId?: unknown;
+          toId?: unknown;
+          score?: unknown;
+          reason?: unknown;
+          sharedEntityKeys?: unknown;
+          sharedClaimHashes?: unknown;
+        };
+
+        if (
+          typeof connection.id !== "string" ||
+          typeof connection.fromId !== "string" ||
+          typeof connection.toId !== "string" ||
+          typeof connection.score !== "number" ||
+          !Number.isFinite(connection.score) ||
+          typeof connection.reason !== "string"
+        ) {
+          return null;
+        }
+
+        return {
+          id: connection.id,
+          fromId: connection.fromId,
+          toId: connection.toId,
+          score: connection.score,
+          reason: connection.reason,
+          sharedEntityKeys: normalizeStringList(connection.sharedEntityKeys),
+          sharedClaimHashes: normalizeStringList(connection.sharedClaimHashes),
+        };
+      })
+      .filter((item): item is NonNullable<Investigation["findingConnections"]>[number] => item !== null);
+  }
+
   private async writeStore(store: InvestigationStore): Promise<void> {
     const payload = `${JSON.stringify(store, null, 2)}\n`;
     const tempPath = `${this.filePath}.tmp`;
@@ -238,4 +309,34 @@ export class JsonFileInvestigationRepository implements InvestigationRepository 
     await writeFile(tempPath, payload, "utf8");
     await rename(tempPath, this.filePath);
   }
+}
+
+function normalizeConfidence(value: unknown): "low" | "medium" | "high" | undefined {
+  if (value === "low" || value === "medium" || value === "high") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const output: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      continue;
+    }
+
+    const normalized = item.trim();
+    if (normalized.length === 0) {
+      continue;
+    }
+
+    output.push(normalized);
+  }
+
+  return output;
 }

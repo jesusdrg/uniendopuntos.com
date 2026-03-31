@@ -4,6 +4,7 @@ import { NotFoundError } from "@/investigations/application/errors/not-found-err
 import { ValidationError } from "@/investigations/application/errors/validation-error";
 import { AddFindingToInvestigation } from "@/investigations/application/use-cases/add-finding-to-investigation";
 import { CreateInvestigation } from "@/investigations/application/use-cases/create-investigation";
+import { DeleteInvestigation } from "@/investigations/application/use-cases/delete-investigation";
 import { GetInvestigationById } from "@/investigations/application/use-cases/get-investigation-by-id";
 import { ListInvestigations } from "@/investigations/application/use-cases/list-investigations";
 import { RegisterBlockedSource } from "@/investigations/application/use-cases/register-blocked-source";
@@ -23,6 +24,10 @@ class InMemoryInvestigationRepository implements InvestigationRepository {
 
   async list(): Promise<Investigation[]> {
     return [...this.investigations.values()];
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    return this.investigations.delete(id);
   }
 }
 
@@ -73,6 +78,24 @@ describe("investigation application use-cases", () => {
     await expect(getUseCase.execute("missing-id")).rejects.toBeInstanceOf(NotFoundError);
   });
 
+  it("deletes an existing investigation", async () => {
+    const repository = new InMemoryInvestigationRepository();
+    const createUseCase = new CreateInvestigation(repository);
+    const deleteUseCase = new DeleteInvestigation(repository);
+    const created = await createUseCase.execute({ query: "Tema delete" });
+
+    await deleteUseCase.execute(created.id);
+
+    expect(await repository.findById(created.id)).toBeNull();
+  });
+
+  it("fails deleting investigation when id does not exist", async () => {
+    const repository = new InMemoryInvestigationRepository();
+    const deleteUseCase = new DeleteInvestigation(repository);
+
+    await expect(deleteUseCase.execute("missing-id")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   it("lists investigations sorted by createdAt descending", async () => {
     const repository = new InMemoryInvestigationRepository();
     const listUseCase = new ListInvestigations(repository);
@@ -112,6 +135,9 @@ describe("investigation application use-cases", () => {
       title: "Documento clave",
       summary: "Resumen del hallazgo",
       sourceUrl: "https://example.com/informe",
+      confidence: "medium",
+      evidence: ["\"Cita uno\"", "\"Cita dos\""],
+      gaps: ["No hay datos de financiamiento"],
     });
 
     expect(updated.findings).toHaveLength(1);
@@ -119,6 +145,9 @@ describe("investigation application use-cases", () => {
     expect(updated.findings[0]?.title).toBe("Documento clave");
     expect(updated.findings[0]?.summary).toBe("Resumen del hallazgo");
     expect(updated.findings[0]?.sourceUrl).toBe("https://example.com/informe");
+    expect(updated.findings[0]?.confidence).toBe("medium");
+    expect(updated.findings[0]?.evidence).toEqual(["\"Cita uno\"", "\"Cita dos\""]);
+    expect(updated.findings[0]?.gaps).toEqual(["No hay datos de financiamiento"]);
     expect(Date.parse(updated.updatedAt)).toBeGreaterThanOrEqual(Date.parse(created.updatedAt));
   });
 

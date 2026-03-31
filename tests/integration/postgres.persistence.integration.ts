@@ -20,6 +20,7 @@ const repository = new DrizzleSqlInvestigationRepository(database);
 let createInvestigationRoute: typeof import("@/app/api/investigations/route").POST;
 let addFindingRoute: typeof import("@/app/api/investigations/[id]/findings/route").POST;
 let getInvestigationByIdRoute: typeof import("@/app/api/investigations/[id]/route").GET;
+let startInvestigationRoute: typeof import("@/app/api/investigations/[id]/start/route").POST;
 
 describe("Postgres integration", () => {
   beforeAll(async () => {
@@ -33,6 +34,9 @@ describe("Postgres integration", () => {
 
     const investigationByIdRouteModule = await import("@/app/api/investigations/[id]/route");
     getInvestigationByIdRoute = investigationByIdRouteModule.GET;
+
+    const startRouteModule = await import("@/app/api/investigations/[id]/start/route");
+    startInvestigationRoute = startRouteModule.POST;
   });
 
   beforeEach(async () => {
@@ -52,6 +56,7 @@ describe("Postgres integration", () => {
           createdAt: timestamp,
           updatedAt: timestamp,
           findings: [],
+          findingConnections: [],
           blockedSources: [],
         });
 
@@ -61,6 +66,9 @@ describe("Postgres integration", () => {
           title: "hallazgo transitorio",
           sourceUrl: "https://example.com/transient",
           summary: "debe revertirse",
+          relatedFindingIds: [],
+          sharedEntityKeys: [],
+          claimHashes: [],
           createdAt: timestamp,
         });
 
@@ -149,6 +157,48 @@ describe("Postgres integration", () => {
     expect(getByIdPayload.findings[0]?.title).toBe("hallazgo de integracion");
     expect(getByIdPayload.findings[0]?.sourceUrl).toBe("https://example.com/integration");
   });
+
+  it("accepts start flow and processes queue-backed findings", async () => {
+    const createResponse = await createInvestigationRoute(
+      new Request("http://localhost/api/investigations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "start flow integration" }),
+      }),
+    );
+
+    const createPayload = (await createResponse.json()) as { id: string };
+
+    const startResponse = await startInvestigationRoute(
+      new Request(`http://localhost/api/investigations/${createPayload.id}/start`, {
+        method: "POST",
+      }),
+      {
+        params: Promise.resolve({ id: createPayload.id }),
+      },
+    );
+
+    expect(startResponse.status).toBe(202);
+
+    await Bun.sleep(250);
+
+    const getByIdResponse = await getInvestigationByIdRoute(
+      new Request(`http://localhost/api/investigations/${createPayload.id}`, {
+        method: "GET",
+      }),
+      {
+        params: Promise.resolve({ id: createPayload.id }),
+      },
+    );
+
+    expect(getByIdResponse.status).toBe(200);
+
+    const payload = (await getByIdResponse.json()) as {
+      findings: unknown[];
+    };
+
+    expect(payload.findings.length).toBeGreaterThan(0);
+  });
 });
 
 async function ensureSchema(): Promise<void> {
@@ -160,6 +210,7 @@ async function ensureSchema(): Promise<void> {
       created_at timestamp with time zone NOT NULL,
       updated_at timestamp with time zone NOT NULL,
       findings jsonb NOT NULL,
+      finding_connections jsonb NOT NULL DEFAULT '[]'::jsonb,
       blocked_sources jsonb NOT NULL
     );
   `);
@@ -171,6 +222,9 @@ async function ensureSchema(): Promise<void> {
       title text NOT NULL,
       source_url text NOT NULL,
       summary text NOT NULL,
+      related_finding_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+      shared_entity_keys jsonb NOT NULL DEFAULT '[]'::jsonb,
+      claim_hashes jsonb NOT NULL DEFAULT '[]'::jsonb,
       created_at timestamp with time zone NOT NULL
     );
   `);
@@ -190,8 +244,31 @@ async function ensureSchema(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS blocked_sources_investigation_url_reason_unique
     ON blocked_sources (investigation_id, url, reason_category);
   `);
+
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS investigation_url_queue (
+      id text PRIMARY KEY NOT NULL,
+      investigation_id text NOT NULL REFERENCES investigations(id) ON DELETE cascade,
+      normalized_url text NOT NULL,
+      normalized_url_hash text NOT NULL,
+      status text NOT NULL,
+      reserved_by text,
+      reserved_at timestamp with time zone,
+      processed_at timestamp with time zone,
+      discovered_from text,
+      created_at timestamp with time zone NOT NULL,
+      updated_at timestamp with time zone NOT NULL
+    );
+  `);
+
+  await database.execute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS investigation_url_queue_investigation_url_hash_unique
+    ON investigation_url_queue (investigation_id, normalized_url_hash);
+  `);
 }
 
 async function resetDatabase(): Promise<void> {
-  await database.execute("TRUNCATE TABLE blocked_sources, findings, investigations RESTART IDENTITY CASCADE;");
+  await database.execute(
+    "TRUNCATE TABLE investigation_url_queue, blocked_sources, findings, investigations RESTART IDENTITY CASCADE;",
+  );
 }

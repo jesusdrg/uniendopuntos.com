@@ -54,7 +54,34 @@ export async function withObservedHttp(
     statusOrResult: String(observedResponse.status),
     durationMs,
     errorCode,
+    level: resolveHttpLogLevel({
+      method: request.method,
+      route: input.route,
+      status: observedResponse.status,
+      hasErrorCode: typeof errorCode === "string",
+    }),
   });
 
   return observedResponse;
+}
+
+function resolveHttpLogLevel(input: {
+  method: string;
+  route: string;
+  status: number;
+  hasErrorCode: boolean;
+}): "debug" | "info" | "error" {
+  if (input.status >= 400 || input.hasErrorCode) {
+    return "error";
+  }
+
+  if (input.method === "GET" && isHighChurnGetRoute(input.route)) {
+    return "debug";
+  }
+
+  return "info";
+}
+
+function isHighChurnGetRoute(route: string): boolean {
+  return route === "/api/investigations/[id]";
 }

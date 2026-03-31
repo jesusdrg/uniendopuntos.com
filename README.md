@@ -126,3 +126,54 @@ curl -X POST http://localhost:3000/api/investigations/<investigation-id>/finding
 # 3) Check latency metrics
 curl http://localhost:3000/api/investigations/events/metrics
 ```
+
+## Slice 2 - Research Runner (LangGraph)
+
+- Endpoint de inicio asincrono: `POST /api/investigations/[id]/start`
+- Grafo backend con 3 investigadores paralelos (`researcher-1..3`) + orchestrator por rondas + synthesizer final.
+- Cola atomica y dedupe por investigacion en Postgres: tabla `investigation_url_queue`.
+- Findings persisten en `findings` y se emiten por SSE existente (`/api/investigations/[id]/events`).
+
+### Modo estricto real (Slice 3)
+
+- El pipeline de agentes no degrada a mocks.
+- Si faltan credenciales minimas (`TAVILY_API_KEY` y al menos una key de LLM entre `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`) `POST /start` responde error explicito `INTEGRATION_CONFIG_MISSING`.
+- Si la corrida inicia correctamente, la respuesta de `POST /start` informa `mode: "real"`.
+
+### LangGraph recursion guard
+
+- Variable opcional: `LANGGRAPH_RECURSION_LIMIT`.
+- Valor por defecto: `100`.
+- Se aplica en `graph.invoke` (y queda lista para `stream` si se activa ese modo).
+- Si se alcanza el limite, la corrida emite `investigation.run_failed` con `errorCode: "LANGGRAPH_RECURSION_LIMIT"` y `run_summary.terminationReason: "recursion_limit"`.
+
+### Diagnosticos de cierre de corrida
+
+- `investigation.run_summary` ahora incluye:
+  - `terminationReason` (`queue_exhausted` | `no_progress` | `max_rounds` | `recursion_limit` | `error`)
+  - `urlsReservedTotal`
+  - `urlsProcessedTotal`
+  - `urlsFailedTotal`
+  - `findingsCreatedTotal`
+  - `findingsPerRound`
+- Tambien se publican aliases `snake_case` para observabilidad: `termination_reason`, `urls_reserved_total`, `urls_processed_total`, `urls_failed_total`, `findings_created_total`, `findings_per_round`.
+
+### Prueba manual Slice 2
+
+```bash
+# 1) Crear investigacion
+curl -X POST http://localhost:3000/api/investigations \
+  -H "content-type: application/json" \
+  -d '{"query":"conexiones obra publica"}'
+
+# 2) Suscribirte al stream SSE de esa investigacion
+curl -N http://localhost:3000/api/investigations/<id>/events
+
+# 3) Iniciar corrida asincrona
+curl -X POST http://localhost:3000/api/investigations/<id>/start
+
+# 4) Verificar findings persistidos
+curl http://localhost:3000/api/investigations/<id>
+```
+
+En UI: abrir `/investigation/<id>`, tocar "Iniciar investigacion" y observar eventos `investigation.finding_added` en vivo.
